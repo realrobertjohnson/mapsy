@@ -8,7 +8,7 @@
     "serve": "vite preview"
   },
   "engines": {
-    "node": "20.10.0"
+    "node": "20.9.0"
   },
   "devDependencies": {
     "@mirohq/websdk-types": "latest",

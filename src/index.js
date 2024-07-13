@@ -1,10 +1,10 @@
-import { generateCards } from "./generateCards";
+import { generateNodes } from "./generateNodes";
 
 const init = () => {
   const { board } = window.miro;
 
   board.ui.on("icon:click", async () => {
-    generateCards();
+    generateNodes();
   });
 };
 

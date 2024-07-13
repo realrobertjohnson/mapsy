@@ -27,7 +27,7 @@ const generateCardObjectFor = (object, x, y) => {
   return cardObject;
 };
 
-export const generateCards = async () => {
+export const generateNodes = async () => {
 
   // get selected widgets
   let selectedWidgets = await board.experimental.getSelection();

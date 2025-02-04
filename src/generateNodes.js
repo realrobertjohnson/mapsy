@@ -3,13 +3,17 @@ const { board } = window.miro;
 const enableConsoleLogging = true;
 export const generateNodes = async () => {
   if (enableConsoleLogging) console.clear();
-
   const nodesContent = [];
 
   try {
 
     // Get selected widgets
     let selectedWidgets = await board.experimental.getSelection();
+
+    if (selectedWidgets.length === 0) {
+      await miro.board.notifications.showError("No objects selected. Select something and try again.");
+      return;
+    }
 
     // Filtering out shapes from all the selected widgets.
     selectedWidgets = selectedWidgets.filter((item) => {
@@ -29,21 +33,49 @@ export const generateNodes = async () => {
     });
     if (enableConsoleLogging) console.log(nodesContent); // Check the final array after the loop
 
-    async function createNodesParallel(nodesContent) {
-      const promises = nodesContent.map((itemContent) =>
-        board.experimental.createMindmapNode({
-          nodeView: { content: `${itemContent.content}` },
-          x: itemContent.x + 800,
-          y: itemContent.y,
-        })
+
+    // This was causing "syncing" messages wtih 20 stickty notes...
+    // async function createNodesParallel(nodesContent) {
+    //   const promises = nodesContent.map((itemContent) =>
+    //     board.experimental.createMindmapNode({
+    //       nodeView: { content: `${itemContent.content}` },
+    //       x: itemContent.x + 800,
+    //       y: itemContent.y,
+    //     })
+    //   );
+
+    //   const results = await Promise.allSettled(promises); // Runs all at once
+    //   if (enableConsoleLogging) console.log("All nodes created:", results);
+    // }
+
+    // // Call the function
+    // await createNodesParallel(nodesContent);
+
+    async function createNodesWithConcurrency(nodesContent, concurrency = 5) {
+      const results = [];
+      const chunks = Array.from({ length: Math.ceil(nodesContent.length / concurrency) }, (_, i) =>
+        nodesContent.slice(i * concurrency, i * concurrency + concurrency)
       );
 
-      const results = await Promise.allSettled(promises); // Runs all at once
-      if (enableConsoleLogging) console.log("All nodes created:", results);
+      for (const chunk of chunks) {
+        const chunkPromises = chunk.map((itemContent) =>
+          board.experimental.createMindmapNode({
+            nodeView: { content: `${itemContent.content}` },
+            x: itemContent.x + 800,
+            y: itemContent.y,
+          })
+        );
+
+        results.push(...(await Promise.allSettled(chunkPromises)));
+        if (enableConsoleLogging) console.log("Processed batch:", results);
+      }
+
+      return results;
     }
 
-    // Call the function
-    await createNodesParallel(nodesContent);
+    // Call with a concurrency limit of 5
+    await createNodesWithConcurrency(nodesContent, 5);
+
 
     await miro.board.notifications.showInfo(
       `${nodesContent.length} mind map node${nodesContent.length === 1 ? " was" : "s were"} successfully created!`

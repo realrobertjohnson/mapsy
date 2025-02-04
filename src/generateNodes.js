@@ -1,6 +1,6 @@
 import { COLOR_MAP } from "./constants";
 const { board } = window.miro;
-const enableConsoleLogging = false;
+const enableConsoleLogging = true;
 export const generateNodes = async () => {
   if (enableConsoleLogging) console.clear();
 
@@ -29,23 +29,21 @@ export const generateNodes = async () => {
     });
     if (enableConsoleLogging) console.log(nodesContent); // Check the final array after the loop
 
-    async function createNodesWithDelay(nodesContent, delay = 100) {
-      for (const itemContent of nodesContent) {
-        await board.experimental.createMindmapNode({
+    async function createNodesParallel(nodesContent) {
+      const promises = nodesContent.map((itemContent) =>
+        board.experimental.createMindmapNode({
           nodeView: { content: `${itemContent.content}` },
           x: itemContent.x + 800,
           y: itemContent.y,
-        });
+        })
+      );
 
-        if (enableConsoleLogging) console.log("Created node:", itemContent);
-
-        // Wait before creating the next node (helps prevent rate limits)
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
+      const results = await Promise.allSettled(promises); // Runs all at once
+      if (enableConsoleLogging) console.log("All nodes created:", results);
     }
 
     // Call the function
-    await createNodesWithDelay(nodesContent, 100); // Adjust delay if needed
+    await createNodesParallel(nodesContent);
 
     await miro.board.notifications.showInfo(
       `${nodesContent.length} mind map node${nodesContent.length === 1 ? " was" : "s were"} successfully created!`

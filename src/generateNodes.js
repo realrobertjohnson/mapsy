@@ -1,77 +1,58 @@
 import { COLOR_MAP } from "./constants";
 const { board } = window.miro;
-const generateCardObjectFor = (object, x, y) => {
-  let cardColor = "#2399f3";
+const enableConsoleLogging = false;
+export const generateNodes = async () => {
+  if (enableConsoleLogging) console.clear();
 
-  if (object?.style?.fillColor) {
-    const objectFillColor = object.style.fillColor;
-    if (objectFillColor !== "transparent") {
-      if (COLOR_MAP[objectFillColor]) {
-        cardColor = COLOR_MAP[objectFillColor];
-      } else {
-        cardColor = objectFillColor;
+  const nodesContent = [];
+
+  try {
+
+    // Get selected widgets
+    let selectedWidgets = await board.experimental.getSelection();
+
+    // Filtering out shapes from all the selected widgets.
+    selectedWidgets = selectedWidgets.filter((item) => {
+      return ["shape", "text", "sticky_note", "mindmap_node", "card"].includes(item.type); // added "card"
+    });
+
+    // For each selected item, get title
+    selectedWidgets.forEach(async (contentItem) => {
+      let itemContent = "";
+      if (contentItem.type === "card") { itemContent = contentItem.title } else { itemContent = contentItem.content }
+      if (enableConsoleLogging) console.log(itemContent);
+      nodesContent.push({
+        content: itemContent,
+        x: contentItem.x,
+        y: contentItem.y
+      });
+    });
+    if (enableConsoleLogging) console.log(nodesContent); // Check the final array after the loop
+
+    async function createNodesWithDelay(nodesContent, delay = 100) {
+      for (const itemContent of nodesContent) {
+        await board.experimental.createMindmapNode({
+          nodeView: { content: `${itemContent.content}` },
+          x: itemContent.x + 800,
+          y: itemContent.y,
+        });
+
+        if (enableConsoleLogging) console.log("Created node:", itemContent);
+
+        // Wait before creating the next node (helps prevent rate limits)
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
+
+    // Call the function
+    await createNodesWithDelay(nodesContent, 100); // Adjust delay if needed
+
+    await miro.board.notifications.showInfo(
+      `${nodesContent.length} mind map node${nodesContent.length === 1 ? " was" : "s were"} successfully created!`
+    );
+
+  } catch (error) {
+    console.error("Error executing Mapsy:", error);
+    await miro.board.notifications.showError("An error occurred while creating mind map nodes.");
   }
-  // Add support for mind maps with text
-  let title = object?.content || object?.nodeView?.content;
-  const cardObject = {
-    title: title,
-    x: x,
-    y: y,
-    style: {
-      cardTheme: cardColor,
-    },
-    tagIds: object.tagIds || [],
-  };
-  return cardObject;
-};
-
-export const generateNodes = async () => {
-
-  // get selected widgets
-  let selectedWidgets = await board.experimental.getSelection();
-
-  // filtering out shapes from all the selected widgets.
-  selectedWidgets = selectedWidgets.filter((item) => {
-    return ["shape", "text", "sticky_note", "mindmap_node", "card"].includes(item.type); // added "card"
-  });
-
-  const cardsObjects = selectedWidgets.map((item) =>
-    generateCardObjectFor(item, item.x + 800, item.y)
-  );
-
-  // START MAX CODE
-
-  // Single out the first selected item
-  let selectedItem;
-  if (selectedWidgets.length > 0) { selectedItem = selectedWidgets[0] }
-
-  // Get the content from the first item selected in the array of selected items -- this is '.content' for all items except cards, whose primary info is stored in '.title'
-  let itemContent = "";
-  if (selectedItem.type === "card") { itemContent = selectedItem.title } else { itemContent = selectedItem.content }
-
-  // Create mind map root node -- insert 'itemContent' into content and adjust the 
-  const root = await board.experimental.createMindmapNode({
-    nodeView: {
-      content: `${itemContent}`,
-    },
-    x: selectedItem.x + 800,
-    y: selectedItem.y,
-  });
-  //END MAX CODE
-
-
-  //  const cardsGeneratedPromise = cardsObjects.map(async (card) => {
-  //    const cardResult = board.createCard(card);
-  //    return cardResult;
-  //  });
-
-  // commented out
-  //  const cardsGenerated = await Promise.all(cardsGeneratedPromise);
-  //  const cardCount = cardsGenerated.length;
-  //  if (cardCount > 0) {
-  //    await board.viewport.zoomTo(cardsGenerated);
-  //    console.log('Cardsy generated ${cardCount} cards for you.');
-  //  }
 };

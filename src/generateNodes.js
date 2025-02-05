@@ -1,4 +1,3 @@
-import { COLOR_MAP } from "./constants";
 const { board } = window.miro;
 const enableConsoleLogging = true;
 export const generateNodes = async () => {
@@ -33,49 +32,64 @@ export const generateNodes = async () => {
     });
     if (enableConsoleLogging) console.log(nodesContent); // Check the final array after the loop
 
-
-    // This was causing "syncing" messages wtih 20 stickty notes...
-    // async function createNodesParallel(nodesContent) {
-    //   const promises = nodesContent.map((itemContent) =>
-    //     board.experimental.createMindmapNode({
-    //       nodeView: { content: `${itemContent.content}` },
-    //       x: itemContent.x + 800,
-    //       y: itemContent.y,
-    //     })
+    // async function createNodesWithConcurrency(nodesContent, concurrency = 5) {
+    //   const results = [];
+    //   const chunks = Array.from({ length: Math.ceil(nodesContent.length / concurrency) }, (_, i) =>
+    //     nodesContent.slice(i * concurrency, i * concurrency + concurrency)
     //   );
 
-    //   const results = await Promise.allSettled(promises); // Runs all at once
-    //   if (enableConsoleLogging) console.log("All nodes created:", results);
+    //   for (const chunk of chunks) {
+    //     const chunkPromises = chunk.map((itemContent) =>
+    //       board.experimental.createMindmapNode({
+    //         nodeView: { content: `${itemContent.content}` },
+    //         x: itemContent.x + 800,
+    //         y: itemContent.y,
+    //       })
+    //     );
+
+    //     results.push(...(await Promise.allSettled(chunkPromises)));
+    //     if (enableConsoleLogging) console.log("Processed batch:", results);
+    //   }
+    //   return results;
     // }
 
-    // // Call the function
-    // await createNodesParallel(nodesContent);
+    // // Call with a concurrency limit of 5
+    // await createNodesWithConcurrency(nodesContent, 5);
 
     async function createNodesWithConcurrency(nodesContent, concurrency = 5) {
+      const newNodes = []; // Array to store created nodes
       const results = [];
+
       const chunks = Array.from({ length: Math.ceil(nodesContent.length / concurrency) }, (_, i) =>
         nodesContent.slice(i * concurrency, i * concurrency + concurrency)
       );
 
       for (const chunk of chunks) {
-        const chunkPromises = chunk.map((itemContent) =>
-          board.experimental.createMindmapNode({
+        const chunkPromises = chunk.map(async (itemContent) => {
+          const nodeResult = await board.experimental.createMindmapNode({
             nodeView: { content: `${itemContent.content}` },
             x: itemContent.x + 800,
             y: itemContent.y,
-          })
-        );
+          });
 
-        results.push(...(await Promise.allSettled(chunkPromises)));
-        if (enableConsoleLogging) console.log("Processed batch:", results);
+          newNodes.push(nodeResult); // Store the created node
+          return nodeResult;
+        });
+
+        const settledResults = await Promise.allSettled(chunkPromises);
+        results.push(...settledResults);
+
+        if (enableConsoleLogging) console.log("Processed batch:", settledResults);
       }
 
-      return results;
+      return { results, newNodes }; // Return both results and created nodes
     }
 
     // Call with a concurrency limit of 5
-    await createNodesWithConcurrency(nodesContent, 5);
+    const { results, newNodes } = await createNodesWithConcurrency(nodesContent, 5);
 
+    await miro.board.deselect();
+    await miro.board.select({ id: newNodes.map(f => f.id) });
 
     await miro.board.notifications.showInfo(
       `${nodesContent.length} mind map node${nodesContent.length === 1 ? " was" : "s were"} successfully created!`
